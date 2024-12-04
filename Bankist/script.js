@@ -3,9 +3,22 @@
 // Bootstrapping Data
 const account1 = {
   owner: 'Jonas Schmedtmann',
-  movements: [200, 450, -400, 3000, -650, -130, 70, 1300],
+  movements: [200, 455.23, -306.5, 25000, -642.21, -133.9, 79.97, 1300],
   interestRate: 1.2, // %
   pin: 1111,
+
+  movementsDates: [
+    '2019-11-18T21:31:17.178Z',
+    '2019-12-23T07:42:02.383Z',
+    '2020-01-28T09:15:04.904Z',
+    '2020-04-01T10:17:24.185Z',
+    '2020-05-08T14:11:59.604Z',
+    '2020-05-27T17:01:17.194Z',
+    '2020-07-11T23:36:17.929Z',
+    '2020-07-12T10:51:36.790Z',
+  ],
+  currency: 'EUR',
+  locale: 'pt-PT', // de-DE
 };
 
 const account2 = {
@@ -13,23 +26,22 @@ const account2 = {
   movements: [5000, 3400, -150, -790, -3210, -1000, 8500, -30],
   interestRate: 1.5,
   pin: 2222,
+
+  movementsDates: [
+    '2019-11-01T13:15:33.035Z',
+    '2019-11-30T09:48:16.867Z',
+    '2019-12-25T06:04:23.907Z',
+    '2020-01-25T14:18:46.235Z',
+    '2020-02-05T16:33:06.386Z',
+    '2020-04-10T14:43:26.374Z',
+    '2020-06-25T18:49:59.371Z',
+    '2020-07-26T12:01:20.894Z',
+  ],
+  currency: 'USD',
+  locale: 'en-US',
 };
 
-const account3 = {
-  owner: 'Steven Thomas Williams',
-  movements: [200, -200, 340, -300, -20, 50, 400, -460],
-  interestRate: 0.7,
-  pin: 3333,
-};
-
-const account4 = {
-  owner: 'Sarah Smith',
-  movements: [430, 1000, 700, 50, 90],
-  interestRate: 1,
-  pin: 4444,
-};
-
-const accounts = [account1, account2, account3, account4];
+const accounts = [account1, account2];
 
 // Elements
 const labelWelcome = document.querySelector('.welcome');
@@ -70,50 +82,69 @@ const radioWithdrawal = document.querySelector(
 );
 const radioButtons = document.querySelectorAll('input[name="filter"]');
 
-const displayMovements = function (movements, type) {
-  console.log(`inner HTML: ${containerMovements.innerHTML}`);
+// global variables
+let currentAccount, timerCountDown;
+
+// functions
+
+const beautifyDate = function (date) {
+  return `${String(date.getDate()).padStart(2, 0)}/${String(
+    date.getMonth()
+  ).padStart(2, 0)}/${date.getFullYear()}`;
+};
+
+const formatCurrency = function (amount, account) {
+  return new Intl.NumberFormat(account.locale, {
+    style: 'currency',
+    currency: `${account.currency}`,
+  }).format(amount);
+};
+
+const updateDisplayDate = function () {
+  labelDate.textContent = beautifyDate(new Date(Date.now()));
+};
+
+const displayMovements = function (account, displayType) {
   containerMovements.innerHTML = '';
-  movements.forEach((movement, i) => {
+  account.movements.forEach((movement, i) => {
     const movType = movement > 0 ? 'deposit' : 'withdrawal';
+    const date = new Date(account.movementsDates[i]);
+    const formattedDate = `${beautifyDate(date)}`;
     const html = `
       <div class="movements__row">
         <div class="movements__type movements__type--${movType}">${
       i + 1
     } ${movType} </div>
-        <div class="movements__date">3 days ago</div>
-        <div class="movements__value">${movement} €</div>
+        <div class="movements__date">${formattedDate}</div>
+        <div class="movements__value">${formatCurrency(movement, account)}</div>
       </div>
     `;
 
-    if (type === movType || type === 'all')
+    if (displayType === movType || displayType === 'all')
       containerMovements.insertAdjacentHTML('afterbegin', html);
   });
-};
-
-const calcDisplayBalance = function (movements) {
-  const balance = movements.reduce((acc, mov) => acc + mov, 0);
-  labelBalance.textContent = `${balance} €`;
 };
 
 const calcDisplaySummary = function (account) {
   account.sumIn = account.movements
     .filter(mov => mov > 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumIn.textContent = `${account.sumIn} €`;
+  labelSumIn.textContent = formatCurrency(account.sumIn, account);
 
   account.sumOut = account.movements
     .filter(mov => mov < 0)
     .reduce((acc, mov) => acc - mov, 0);
-  labelSumOut.textContent = `${account.sumOut} €`;
+  labelSumOut.textContent = formatCurrency(account.sumOut, account);
 
   account.balance = account.sumIn - account.sumOut;
+  labelBalance.textContent = formatCurrency(account.balance, account);
 
   const interest = account.movements
     .filter(mov => mov > 0)
     .map(mov => (mov * account.interestRate) / 100)
     .filter(interest => interest >= 1)
     .reduce((acc, interest) => acc + interest, 0);
-  labelSumInterest.textContent = `${interest} €`;
+  labelSumInterest.textContent = formatCurrency(interest, account);
 };
 
 const getLoginId = function (owner) {
@@ -127,6 +158,53 @@ const getLoginId = function (owner) {
   console.log(`login id: ${id}, len: ${id.length}`);
   return id;
 };
+
+const addTransfer = function (account, amount, date) {
+  account.movements.push(amount);
+  account.movementsDates.push(date.toISOString());
+  amount > 0 ? (account.sumIn += amount) : (account.sumOut -= amount);
+  account.balance += amount;
+};
+
+const formatTimer = function (timer) {
+  const min = Math.trunc(timer / 60);
+  const sec = Math.trunc(timer % 60);
+  return `${String(min).padStart(2, 0)}:${String(sec).padStart(2, 0)}`;
+};
+
+const resetInactivityTimer = function () {
+  clearInterval(timerCountDown);
+  let inactivityTimer = 120; // 2 minutes
+  labelTimer.textContent = formatTimer(inactivityTimer);
+  const timer = setInterval(() => {
+    labelTimer.textContent = formatTimer(--inactivityTimer);
+    if (timer === 0) {
+      clearInterval(timer);
+      labelWelcome.textContent = 'Please Login.';
+      containerApp.style.opacity = 0;
+    }
+  }, 1000);
+
+  return timer;
+};
+
+const loadAccount = function (account) {
+  inputLoginUsername.value = inputLoginPin.value = '';
+  inputLoginPin.blur();
+  labelWelcome.textContent = `Welcome back, ${account.owner.split(' ')[0]}`;
+  containerApp.style.opacity = 100;
+  document.querySelector('input[name="filter"][value="all"]').checked = true;
+
+  displayMovements(account, 'all');
+  calcDisplaySummary(account);
+  updateDisplayDate();
+  timerCountDown = resetInactivityTimer();
+};
+
+// bootstrap - to be removed
+// loadAccount(account1);
+
+// application logic
 
 accounts.forEach(account => (account.loginId = getLoginId(account.owner)));
 console.log(account1);
@@ -143,8 +221,6 @@ const validateLogin = function () {
   return account;
 };
 
-let currentAccount;
-
 btnLogin.addEventListener('click', function (e) {
   e.preventDefault();
 
@@ -154,15 +230,7 @@ btnLogin.addEventListener('click', function (e) {
     alert('Incorrect Login Id or PIN. Try again.');
   } else {
     currentAccount = account;
-    inputLoginUsername.value = inputLoginPin.value = '';
-    inputLoginPin.blur();
-    labelWelcome.textContent = `Welcome back, ${account.owner.split(' ')[0]}`;
-    containerApp.style.opacity = 100;
-    document.querySelector('input[name="filter"][value="all"]').checked = true;
-
-    displayMovements(account.movements, 'all');
-    calcDisplayBalance(account.movements);
-    calcDisplaySummary(account);
+    loadAccount(account);
   }
 });
 
@@ -170,9 +238,12 @@ btnLogin.addEventListener('click', function (e) {
 radioButtons.forEach(radio => {
   radio.addEventListener('change', event => {
     console.log(`Selected filter: ${event.target.value}`);
-    displayMovements(currentAccount.movements, event.target.value);
+    displayMovements(currentAccount, event.target.value);
+    timerCountDown = resetInactivityTimer();
   });
 });
+
+// functions that update global state on current account (should they?)
 
 const validateTransfer = function (toId, amount) {
   const isAmountValid = amount <= currentAccount.balance && amount > 0;
@@ -193,14 +264,8 @@ const validateTransfer = function (toId, amount) {
   return toAccount;
 };
 
-const addTransfer = function (account, amount) {
-  account.movements.push(amount);
-  amount > 0 ? (account.sumIn += amount) : (account.sumOut -= amount);
-  account.balance += amount;
-};
-
-const updateMovementWithUI = function (transferAmount) {
-  addTransfer(currentAccount, transferAmount);
+const updateMovementWithUI = function (transferAmount, date) {
+  addTransfer(currentAccount, transferAmount, date);
   labelBalance.textContent = `${currentAccount.balance} €`;
   labelSumIn.textContent = `${currentAccount.sumIn} €`;
   labelSumOut.textContent = `${currentAccount.sumOut} €`;
@@ -208,9 +273,14 @@ const updateMovementWithUI = function (transferAmount) {
   const movType = transferAmount > 0 ? 'deposit' : 'withdrawal';
   const html = `
       <div class="movements__row">
-        <div class="movements__type movements__type--${movType}">${currentAccount.movements.length} ${movType} </div>
-        <div class="movements__date">3 days ago</div>
-        <div class="movements__value">${transferAmount} €</div>
+        <div class="movements__type movements__type--${movType}">${
+    currentAccount.movements.length
+  } ${movType} </div>
+        <div class="movements__date">${beautifyDate(date)}</div>
+        <div class="movements__value">${formatCurrency(
+          transferAmount,
+          currentAccount
+        )}</div>
       </div>
     `;
 
@@ -226,10 +296,12 @@ btnTransfer.addEventListener('click', function (e) {
 
   const toAccount = validateTransfer(toId, transferAmount);
   if (!toAccount) return;
-  addTransfer(toAccount, transferAmount);
+  const now = new Date(Date.now());
+  addTransfer(toAccount, transferAmount, now);
 
   // show withdrawal
-  updateMovementWithUI(-1 * transferAmount);
+  updateMovementWithUI(-1 * transferAmount, now);
+  timerCountDown = resetInactivityTimer();
 });
 
 btnLoan.addEventListener('click', function (e) {
@@ -243,6 +315,7 @@ btnLoan.addEventListener('click', function (e) {
     updateMovementWithUI(loanAmount);
     formLoan.reset();
   }
+  timerCountDown = resetInactivityTimer();
 });
 
 btnClose.addEventListener('click', function (e) {
@@ -257,6 +330,8 @@ btnClose.addEventListener('click', function (e) {
       account => account.loginId === id && account.pin === pin
     );
     accounts.splice(index, 1);
+
+    // LOGOUT
     containerApp.style.opacity = 0;
     formClose.reset();
   }
