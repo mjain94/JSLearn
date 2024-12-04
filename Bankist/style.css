@@ -169,7 +169,7 @@ nav {
 
 /* SUMMARY */
 .summary {
-  grid-row: 5 / 6;
+  grid-row: 6 / 7;
   display: flex;
   align-items: baseline;
   padding: 0 0.3rem;
@@ -197,12 +197,23 @@ nav {
   color: #f5465d;
 }
 
-.btn--sort {
+.filter-options {
+  grid-row: 5 / 6;
   margin-left: auto;
-  border: none;
-  background: none;
-  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-options input[type='radio'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.filter-options label {
+  font-size: 1.2rem;
   font-weight: 500;
+  color: #666;
   cursor: pointer;
 }
 

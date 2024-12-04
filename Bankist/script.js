@@ -1,10 +1,6 @@
 'use strict';
 
-/////////////////////////////////////////////////
-/////////////////////////////////////////////////
-// BANKIST APP
-
-// Data
+// Bootstrapping Data
 const account1 = {
   owner: 'Jonas Schmedtmann',
   movements: [200, 450, -400, 3000, -650, -130, 70, 1300],
@@ -65,7 +61,16 @@ const formClose = document.querySelector('.form--close');
 const inputCloseUsername = document.querySelector('.form__input--user');
 const inputClosePin = document.querySelector('.form__input--pin');
 
-const displayMovements = function (movements) {
+const radioAll = document.querySelector('input[name="filter"][value="all"]');
+const radioDeposit = document.querySelector(
+  'input[name="filter"][value="deposit"]'
+);
+const radioWithdrawal = document.querySelector(
+  'input[name="filter"][value="withdrawal"]'
+);
+const radioButtons = document.querySelectorAll('input[name="filter"]');
+
+const displayMovements = function (movements, type) {
   console.log(`inner HTML: ${containerMovements.innerHTML}`);
   containerMovements.innerHTML = '';
   movements.forEach((movement, i) => {
@@ -80,7 +85,8 @@ const displayMovements = function (movements) {
       </div>
     `;
 
-    containerMovements.insertAdjacentHTML('afterbegin', html);
+    if (type === movType || type === 'all')
+      containerMovements.insertAdjacentHTML('afterbegin', html);
   });
 };
 
@@ -102,11 +108,12 @@ const calcDisplaySummary = function (account) {
 
   account.balance = account.sumIn - account.sumOut;
 
-  labelSumInterest.textContent = account.movements
+  const interest = account.movements
     .filter(mov => mov > 0)
     .map(mov => (mov * account.interestRate) / 100)
     .filter(interest => interest >= 1)
     .reduce((acc, interest) => acc + interest, 0);
+  labelSumInterest.textContent = `${interest} €`;
 };
 
 const getLoginId = function (owner) {
@@ -151,10 +158,20 @@ btnLogin.addEventListener('click', function (e) {
     inputLoginPin.blur();
     labelWelcome.textContent = `Welcome back, ${account.owner.split(' ')[0]}`;
     containerApp.style.opacity = 100;
-    displayMovements(account.movements);
+    document.querySelector('input[name="filter"][value="all"]').checked = true;
+
+    displayMovements(account.movements, 'all');
     calcDisplayBalance(account.movements);
     calcDisplaySummary(account);
   }
+});
+
+// Add an event listener to each radio button
+radioButtons.forEach(radio => {
+  radio.addEventListener('change', event => {
+    console.log(`Selected filter: ${event.target.value}`);
+    displayMovements(currentAccount.movements, event.target.value);
+  });
 });
 
 const validateTransfer = function (toId, amount) {
@@ -197,7 +214,9 @@ const updateMovementWithUI = function (transferAmount) {
       </div>
     `;
 
-  containerMovements.insertAdjacentHTML('afterbegin', html);
+  const type = document.querySelector('input[name="filter"]:checked').value;
+  if (type === movType || type === 'all')
+    containerMovements.insertAdjacentHTML('afterbegin', html);
 };
 
 btnTransfer.addEventListener('click', function (e) {
